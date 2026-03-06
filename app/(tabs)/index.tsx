@@ -17,6 +17,8 @@ import {
   ArrowPathRoundedSquareIcon,
   ChevronDoubleRightIcon,
 } from "react-native-heroicons/outline";
+import { api, API_BASE_URL, SEARCH_ROUTE_PATH } from "@/utils/env";
+import { genUUID, nowOffsetDateTime } from "@/utils/request";
 
 interface RouteOfferData {
   originLocationCode: string;
@@ -133,6 +135,46 @@ const LocationInput: React.FC<LocationInputProps> = ({
   </View>
 );
 
+type SearchRouteRequest = {
+  requestId: string;
+  requestDateTime: string;
+  channel: string;
+  data: {
+    origin: string;
+    destination: string;
+    departureDate: string;
+    fromTime?: string;
+    toTime?: string;
+    pageSize: string;
+    pageNumber: string;
+    seat?: string;
+  };
+};
+
+type SearchRouteResponse = {
+  requestId: string;
+  requestDateTime: string;
+  channel: string;
+  data: {
+    id: string;
+    pickupBranch: string;
+    origin: string;
+    destination: string;
+    plannedStartTime: string;
+    plannedEndTime: string;
+    routeCode: string;
+    stopPoints: [
+      {
+        id: string;
+        stopOrder: string;
+        routeId: string;
+        plannedArrivalTime: string;
+        plannedDepartureTime: string;
+        note: string;
+      },
+    ];
+  };
+};
 // Departure Date Component
 interface DepartureDateProps {
   placeholder: string;
@@ -163,7 +205,6 @@ const DepartureDate: React.FC<DepartureDateProps> = ({
 export default function HomeScreen() {
   const [isPending, setIsPending] = useState(false);
   const [pageNavigation, setPageNavigation] = useState("one-way");
-
   const [routeOfferData, setRouteOfferData] = useState<RouteOfferData>({
     originLocationCode: "",
     destinationLocationCode: "",
@@ -176,7 +217,7 @@ export default function HomeScreen() {
     originCity: "",
     destinationCity: "",
     departureDate: "",
-    seat: 0,
+    seat: 1,
   });
 
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -186,22 +227,59 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
-
-      const loadDepartureDate = async () => {
+      const loadForm = async () => {
         try {
-          const v = await AsyncStorage.getItem("departureDate");
+          const [
+            depDate,
+            originName,
+            originCode,
+            destinationName,
+            destinationCode,
+          ] = await Promise.all([
+            AsyncStorage.getItem("departureDate"),
+            AsyncStorage.getItem("originCity"),
+            AsyncStorage.getItem("originCode"),
+            AsyncStorage.getItem("destinationCity"),
+            AsyncStorage.getItem("destinationCode"),
+          ]);
+
           if (!mounted) return;
 
-          if (v) {
-            setSelectedDate(v);
-            setSearchRouteData((prev) => ({ ...prev, departureDate: v }));
+          if (depDate) {
+            setSelectedDate(depDate);
+            setSearchRouteData((p) => ({ ...p, departureDate: depDate }));
+          }
+
+          if (originName) {
+            setSearchRouteData((p) => ({ ...p, originCity: originName }));
+          }
+
+          if (originCode) {
+            setRouteOfferData((p) => ({
+              ...p,
+              originLocationCode: originCode,
+            }));
+          }
+
+          if (destinationName) {
+            setSearchRouteData((p) => ({
+              ...p,
+              destinationCity: destinationName,
+            }));
+          }
+
+          if (destinationCode) {
+            setRouteOfferData((p) => ({
+              ...p,
+              destinationLocationCode: destinationCode,
+            }));
           }
         } catch (e) {
-          console.log("loadDepartureDate error:", e);
+          console.log("load form error:", e);
         }
       };
 
-      loadDepartureDate();
+      loadForm();
 
       return () => {
         mounted = false;
@@ -210,56 +288,71 @@ export default function HomeScreen() {
   );
 
   const handleParentSearch = async () => {
-    const searchUrl = constructSearchUrl();
+    if (!searchRouteData.originCity || !searchRouteData.destinationCity) {
+      Alert.alert("Error", "Please select the departure and destination");
+      return;
+    }
+
+    if (!searchRouteData.departureDate) {
+      Alert.alert("Error", "Please select the deprature date");
+      return;
+    }
+
+    if (!searchRouteData.seat || searchRouteData.seat < 1) {
+      Alert.alert(
+        "Error",
+        "Please add seats number, and must be greater than 1",
+      );
+      return;
+    }
+
+    const payload: SearchRouteRequest = {
+      requestId: genUUID(),
+      requestDateTime: nowOffsetDateTime(),
+      channel: "ONL",
+      data: {
+        origin: searchRouteData.originCity,
+        destination: searchRouteData.destinationCity,
+        departureDate: searchRouteData.departureDate,
+        seat: String(searchRouteData.seat),
+        pageSize: "10",
+        pageNumber: "0",
+      },
+    };
+
     setIsPending(true);
+    try {
+      const response = await api.post<SearchRouteResponse>(
+        SEARCH_ROUTE_PATH,
+        payload,
+      );
 
-    if (searchUrl) {
-      try {
-        const response = await axios.get(searchUrl, {
-          headers: { Authorization: `Bearer ${apiToken}` },
-        });
+      const data = response.data;
 
-        if (response.data) {
-          setIsPending(false);
-          await AsyncStorage.setItem(
-            "searchRouteData",
-            JSON.stringify(searchRouteData),
-          );
+      await AsyncStorage.setItem("searchRouteData", JSON.stringify(data));
 
-          router.push({
-            pathname: "/searchresult",
-            params: {
-              routeOfferData: JSON.stringify(routeOfferData),
-            },
-          });
-        }
-      } catch (error) {
-        console.error("Error fetching flight offers", error);
+      router.push({
+        pathname: "/searchresult",
+        params: {
+          routeOfferData: JSON.stringify(data),
+        },
+      });
+    } catch (error: any) {
+      console.error("Error fetching flight offers", error);
+      setIsPending(false);
+
+      if (error.response && error.response.status === 401) {
+        Alert.alert("API Key Expired", "Please refresh your access token", [
+          { text: "OK" },
+        ]);
+      } else {
+        Alert.alert("Error", "An error occurred while fetching route offers", [
+          { text: "OK" },
+        ]);
       }
+    } finally {
+      setIsPending(false);
     }
-  };
-
-  const constructSearchUrl = () => {
-    const {
-      originLocationCode,
-      destinationLocationCode,
-      departureDate,
-      adults,
-      maxResults,
-    } = routeOfferData;
-
-    const formattedDepartureDate = departureDate.replace(/^"|"$/g, "");
-
-    if (
-      !originLocationCode ||
-      !destinationLocationCode ||
-      !departureDate ||
-      !adults
-    ) {
-      Alert.alert("Error", "Please fill all the required fields");
-    }
-
-    return `${apiBaseUrl}?originLocationCode=${originLocationCode}&destinationLocationCode=${destinationLocationCode}$departureDate=${departureDate}&adults=${adults}`;
   };
 
   return (
@@ -309,7 +402,12 @@ export default function HomeScreen() {
             }
             icon={<FontAwesome5 size={20} color="gray" name="bus" />}
             value={searchRouteData.originCity}
-            onPress={() => router.push("/departure")}
+            onPress={() =>
+              router.push({
+                pathname: "/departure",
+                params: { type: "origin" },
+              })
+            }
           />
 
           {/* Destination City  */}
@@ -321,7 +419,12 @@ export default function HomeScreen() {
             }
             icon={<FontAwesome5 size={20} color="gray" name="map-marker-alt" />}
             value={searchRouteData.destinationCity}
-            onPress={() => {}}
+            onPress={() =>
+              router.push({
+                pathname: "/selectLocation",
+                params: { type: "destination" },
+              })
+            }
           />
 
           {/* Departure Date */}
@@ -367,7 +470,7 @@ export default function HomeScreen() {
           <View className="w-full justify-start pt-2 px-4 mt-2">
             <Pressable
               className="bg-[#12B3A8] rounded-lg justify-center items-center py-4"
-              onPress={() => {}}
+              onPress={handleParentSearch}
             >
               <Text className="text-white font-bold text-lg">Search</Text>
             </Pressable>

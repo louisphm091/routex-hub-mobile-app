@@ -2,15 +2,13 @@ import {
   View,
   Text,
   Pressable,
-  TextInput,
-  ActivityIndicator,
   FlatList,
+  ActivityIndicator,
+  TextInput,
 } from "react-native";
 import React, { useCallback, useRef, useState } from "react";
-import { router } from "expo-router";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
-import axios from "axios";
-
+import { router } from "expo-router";
 import { api, API_BASE_URL, SEARCH_LOCATION_PATH } from "@/utils/env";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -19,11 +17,13 @@ interface LocationItem {
   name: string;
   code: string;
 }
-const DepartureScreen = () => {
+
+const Destination = () => {
   const [searchInput, setSearchInput] = useState("");
   const [autoCompleteResult, setAutoCompleteResults] = useState<LocationItem[]>(
     [],
   );
+
   const [loading, setLoading] = useState(false);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -58,7 +58,6 @@ const DepartureScreen = () => {
       fetchLocation(value);
     }, 250);
   };
-
   return (
     <View className="flex-1 items-center bg-[#F5F7FA]">
       <View className="w-full h-full">
@@ -83,7 +82,7 @@ const DepartureScreen = () => {
 
             <View className="w-[60%] justify-center items-center flex-row">
               <Text className="text-lg text-white font-extrabold">
-                Select Departure
+                Select Destination
               </Text>
             </View>
 
@@ -130,8 +129,8 @@ const DepartureScreen = () => {
                       setSearchInput(item.name);
                       setAutoCompleteResults([]);
                       await AsyncStorage.multiSet([
-                        ["originCity", item.name],
-                        ["originCode", item.code],
+                        ["destinationCity", item.name],
+                        ["destinationCode", item.code],
                       ]);
                       router.back();
                     }}
@@ -151,4 +150,4 @@ const DepartureScreen = () => {
   );
 };
 
-export default DepartureScreen;
+export default Destination;

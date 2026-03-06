@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import "react-native-reanimated";
 import "../global.css";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { StackScreen } from "react-native-screens";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -31,7 +32,9 @@ export default function RootLayout() {
         />
         <Stack.Screen name="departure" />
         <Stack.Screen name="departureDate" />
+        <Stack.Screen name="destination" />
         <Stack.Screen name="searchresult" />
+        <Stack.Screen name="route-detail" />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
