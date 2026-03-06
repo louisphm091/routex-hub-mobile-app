@@ -1,37 +1,91 @@
-import { View, Text, Image } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import React from "react";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
 
-const Header = () => {
+interface HeaderProps {
+  isLoggedIn: boolean;
+  userName: string;
+  routePoint?: string | null;
+}
+
+const Header: React.FC<HeaderProps> = ({
+  isLoggedIn,
+  userName,
+  routePoint,
+}) => {
+  const displayName = userName?.trim()?.length > 0 ? userName : "Customer";
+
   return (
-    <View className="flex-row justify-between items-center px-4">
-      <View className="w-1/2 flex-row h-14 items-center">
-        <View className="pr-2">
-          <View className="overflow-hidden">
-            <Image
-              source={require("../assets/images/react-logo.png")}
-              className="w-12 h-12 border-2 border-white rounded-full"
+    <View className="px-4">
+      {/* Top row */}
+      <View className="flex-row justify-between items-center">
+        <View className="flex-1 pr-4">
+          <Text className="text-white text-[26px] font-extrabold">
+            {isLoggedIn
+              ? `Welcome back, ${displayName}!`
+              : "Welcome, Customer!"}
+          </Text>
+
+          <Text className="text-gray-300 mt-2 leading-5">
+            {isLoggedIn
+              ? "Manage routes, bookings and seat inventory with ease."
+              : "Search routes, choose seats and book your next trip easily."}
+          </Text>
+        </View>
+
+        <Pressable
+          onPress={() => {
+            if (!isLoggedIn) {
+              router.push("/login");
+            }
+          }}
+          className={`w-14 h-14 rounded-full items-center justify-center ${
+            isLoggedIn ? "bg-[#12B3A8]" : "bg-[#2C364D]"
+          }`}
+        >
+          <MaterialCommunityIcons
+            name={isLoggedIn ? "account" : "account-outline"}
+            size={28}
+            color="white"
+          />
+        </Pressable>
+      </View>
+
+      {/* Bottom card */}
+      <View className="mt-5 bg-[#263148] rounded-2xl px-4 py-4 flex-row justify-between items-center">
+        <View className="flex-1 pr-4">
+          {isLoggedIn ? (
+            <>
+              <Text className="text-gray-300 text-xs">Route Point</Text>
+              <Text className="text-white text-xl font-extrabold mt-1">
+                {routePoint || "0"}
+              </Text>
+              <Text className="text-gray-400 text-xs mt-1">
+                Continue booking to earn more points
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text className="text-gray-300 text-xs">Guest access</Text>
+              <Text className="text-white text-lg font-extrabold mt-1">
+                Explore available trips
+              </Text>
+              <Text className="text-gray-400 text-xs mt-1">
+                Sign in to save bookings and track route points
+              </Text>
+            </>
+          )}
+        </View>
+
+        <View className="items-center justify-center">
+          <View className="w-12 h-12 rounded-full bg-[#1E9E95] items-center justify-center">
+            <MaterialCommunityIcons
+              name={isLoggedIn ? "map-marker-path" : "bus-clock"}
+              size={24}
+              color="white"
             />
           </View>
-        </View>
-        <View>
-          <Text className="text-base text-neutral-400 font-medium">
-            Welcome Back
-          </Text>
-          <Text className="text-xl text-white font-bold">
-            Louis !
-          </Text>
-        </View>
-      </View>
-      <View className="w-1/2 flex-row space-x-4 justify-end items-center h-14">
-        <View className="bg-gray-600 w-fit rounded-full px-4 justify-center h-full flex-row items-center gap-2">
-            <View className="bg-gray-500 rounded-full w-8 h-8 justify-center items-center">
-                <Text className="text-white font-semibold">P</Text>
-            </View>
-
-            <View className="justify-start items-start gap-1">
-                <Text className="text-base text-gray-400">Route Point</Text>
-                <Text className="text-white">🚎 5,231</Text>
-            </View>
         </View>
       </View>
     </View>

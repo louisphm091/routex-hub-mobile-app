@@ -1,8 +1,8 @@
-# RouteHub – Transportation Management & Development Platform
+# Go Routex – Transportation Management & Development Platform
 
 ## Overview
 
-RouteHub is a comprehensive transportation management platform designed to digitalize and optimize bus operator businesses.
+Go Routex is a comprehensive transportation management platform designed to digitalize and optimize bus operator businesses.
 
 The system supports end-to-end operations including:
 
@@ -12,7 +12,7 @@ The system supports end-to-end operations including:
 - Financial & operational reporting
 - Real-time monitoring & administration
 
-RouteHub is built with a microservices architecture, scalable infrastructure, and cloud-native deployment strategy.
+Go Routex is built with a microservices architecture, scalable infrastructure, and cloud-native deployment strategy.
 
 ---
 
@@ -29,7 +29,7 @@ RouteHub is built with a microservices architecture, scalable infrastructure, an
 
 ## Repository Structure
 
-The RouteHub ecosystem consists of multiple repositories organized by domain and responsibility.
+The Go Routex ecosystem consists of multiple repositories organized by domain and responsibility.
 
 ### Backend Services
 
@@ -106,7 +106,7 @@ The RouteHub ecosystem consists of multiple repositories organized by domain and
 
 ## Deployment Strategy
 
-RouteHub follows a GitOps-based deployment model:
+Go Routex follows a GitOps-based deployment model:
 
 1. Code merged into `master`
 2. CI auto-build & auto-tag
@@ -124,7 +124,7 @@ RouteHub follows a GitOps-based deployment model:
 
 ## Core Business Domains
 
-RouteHub manages the following core entities:
+Go Routex manages the following core entities:
 
 - Users (Admin / Staff / Customer)
 - Drivers

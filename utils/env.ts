@@ -3,10 +3,12 @@ import { encode as btoa } from "base-64";
 
 // src/utils/env.ts
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://192.168.99.146:8000";
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://192.168.1.75:8000";
 
 export const SEARCH_LOCATION_PATH =
   "/api/v1/management/location-service/search";
+
+export const HOLD_SEAT_PATH = "/api/v1/management/route-service/hold-seat";
 
 export const GET_ALL_SEAT_PATH = "/api/v1/management/route-service/get-seats";
 

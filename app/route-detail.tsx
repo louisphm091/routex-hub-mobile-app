@@ -2,11 +2,39 @@ import { View, Text, Pressable, Alert, ScrollView } from "react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { router, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
-import { api, API_BASE_URL, GET_ALL_SEAT_PATH } from "@/utils/env";
+import {
+  api,
+  API_BASE_URL,
+  GET_ALL_SEAT_PATH,
+  HOLD_SEAT_PATH,
+} from "@/utils/env";
 import { genUUID, nowOffsetDateTime } from "@/utils/request";
 
 type RouteSeatStatus = "AVAILABLE" | "HELD" | "SOLD" | "BLOCKED";
 
+type HoldSeatRequest = {
+  requestId: string;
+  requestDateTime: string;
+  channel: string;
+  data: {
+    routeId: string;
+    seatNos: string[];
+  };
+};
+
+type HoldSeatResponse = {
+  requestId: string;
+  requestDateTime: string;
+  channel: string;
+  result?: {
+    responseCode: string;
+    description: string;
+  };
+  data?: {
+    routeId: string;
+    seatNos: string[];
+  };
+};
 type GetAllSeatRequest = {
   requestId: string;
   requestDateTime: string;
@@ -87,27 +115,6 @@ const durationText = (startIso?: string, endIso?: string) => {
   return `${h}h ${m}m`;
 };
 
-const buildSeatNos = (seatCapacity = 34, hasFloor = true) => {
-  if (!hasFloor) {
-    return Array.from({ length: seatCapacity }, (_, i) =>
-      String(i + 1).padStart(2, "0"),
-    );
-  }
-
-  const half = Math.ceil(seatCapacity / 2);
-  const seatNos: string[] = [];
-
-  for (let i = 1; i <= half; i++) {
-    seatNos.push(`A${String(i).padStart(2, "0")}`);
-  }
-
-  for (let i = half + 1; i <= seatCapacity; i++) {
-    seatNos.push(`B${String(i).padStart(2, "0")}`);
-  }
-
-  return seatNos;
-};
-
 const mockRouteData: RouteItem = {
   id: "09b6fc7c-c3ce-4ed6-9093-ada0db903546",
   pickupBranch: "233 Dien Bien Phu",
@@ -139,6 +146,55 @@ const RouteDetail = () => {
 
   const [routeSeat, setRouteSeat] = useState<RouteSeatItems[]>([]);
   const [loadingSeat, setLoadingSeat] = useState(false);
+  const [holdingSeat, setHoldingSeat] = useState(false);
+
+  const handleContinue = async () => {
+    if (selectedSeats.length === 0) {
+      return;
+    }
+
+    const payload: HoldSeatRequest = {
+      requestId: genUUID(),
+      requestDateTime: nowOffsetDateTime(),
+      channel: "ONL",
+      data: {
+        routeId: routeData.id,
+        seatNos: selectedSeats,
+      },
+    };
+
+    setHoldingSeat(true);
+
+    console.log(routeData.id);
+    try {
+      const response = await api.post<HoldSeatResponse>(
+        HOLD_SEAT_PATH,
+        payload,
+      );
+
+      const resultCode = response.data?.result?.responseCode;
+
+      if (resultCode && resultCode !== "0000") {
+        Alert.alert(
+          "Error",
+          response.data?.result?.description || "Hold seat failed",
+        );
+        await fetchRouteSeats();
+        return;
+      }
+
+      router.push({
+        pathname: "/booking",
+        params: {
+          routeData: JSON.stringify(routeData),
+          selectedSeats: JSON.stringify(selectedSeats),
+        },
+      });
+    } catch (error: any) {
+      console.log("Hold Seat Error: ", error?.response?.data ?? error);
+      Alert.alert("Error", "Unable to hold selected seats");
+    }
+  };
 
   const routeData: RouteItem = useMemo(() => {
     if (!routeDataStr) return mockRouteData;
@@ -177,12 +233,19 @@ const RouteDetail = () => {
     }
   }, [routeData.id]);
 
-  const allSeats = useMemo(
-    () => buildSeatNos(routeData.seatCapacity ?? 34, true),
-    [routeData.seatCapacity],
-  );
+  const allSeats = useMemo(() => {
+    if (!routeSeat || routeSeat.length === 0) return {};
+
+    return [...routeSeat]
+      .map((seat) => seat.seatNo)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [routeSeat]);
 
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+
+  const canContinue = selectedSeats.length > 0;
+
+  const [bottomPanelHeight, setBottomPanelHeight] = useState(0);
 
   const seatStatusMap = useMemo(() => {
     const map = new Map<string, RouteSeatStatus>();
@@ -205,6 +268,7 @@ const RouteDetail = () => {
         : [...prev, seatNo],
     );
   };
+
   useEffect(() => {
     fetchRouteSeats();
   }, [fetchRouteSeats]);
@@ -246,7 +310,10 @@ const RouteDetail = () => {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: bottomPanelHeight + 24,
+        }}
       >
         {/* Route Info */}
         <View className="bg-white rounded-2xl p-4 border border-gray-100">
@@ -344,44 +411,53 @@ const RouteDetail = () => {
             </View>
           ) : (
             <View className="flex-row flex-wrap justify-between">
-              {allSeats.map((seatNo) => {
-                const status = seatStatusMap.get(seatNo) ?? "AVAILABLE";
-                const isSold = status === "SOLD";
-                const isHeld = status === "HELD";
-                const isBlocked = status === "BLOCKED";
-                const isSelected = selectedSeats.includes(seatNo);
+              {routeSeat
+                .slice()
+                .sort((a, b) =>
+                  a.seatNo.localeCompare(b.seatNo, undefined, {
+                    numeric: true,
+                  }),
+                )
+                .map((seat) => {
+                  const seatNo = seat.seatNo;
+                  const status = seat.status ?? "AVAILABLE";
 
-                const disabled = isSold || isHeld || isBlocked;
+                  const isSold = status === "SOLD";
+                  const isHeld = status === "HELD";
+                  const isBlocked = status === "BLOCKED";
+                  const isSelected = selectedSeats.includes(seatNo);
 
-                const bgClass = isSold
-                  ? "bg-gray-300"
-                  : isHeld
-                    ? "bg-[#FFE8E6]"
-                    : isBlocked
-                      ? "bg-gray-500"
-                      : isSelected
-                        ? "bg-[#12B3A8]"
-                        : "bg-white";
+                  const disabled = isSold || isHeld || isBlocked;
 
-                const textClass = isSelected
-                  ? "text-white"
-                  : disabled
-                    ? "text-gray-500"
-                    : "text-gray-800";
+                  const bgClass = isSold
+                    ? "bg-gray-300"
+                    : isHeld
+                      ? "bg-[#FFE8E6]"
+                      : isBlocked
+                        ? "bg-gray-500"
+                        : isSelected
+                          ? "bg-[#12B3A8]"
+                          : "bg-white";
 
-                return (
-                  <Pressable
-                    key={seatNo}
-                    disabled={disabled}
-                    onPress={() => toggleSeat(seatNo)}
-                    className={`w-[22%] mb-3 h-12 rounded-xl border border-gray-300 items-center justify-center ${bgClass}`}
-                  >
-                    <Text className={`font-semibold ${textClass}`}>
-                      {seatNo}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                  const textClass = isSelected
+                    ? "text-white"
+                    : disabled
+                      ? "text-gray-500"
+                      : "text-gray-800";
+
+                  return (
+                    <Pressable
+                      key={`${seat.routeId}-${seatNo}`}
+                      disabled={disabled}
+                      onPress={() => toggleSeat(seatNo)}
+                      className={`w-[22%] mb-3 h-12 rounded-xl border border-gray-300 items-center justify-center ${bgClass}`}
+                    >
+                      <Text className={`font-semibold ${textClass}`}>
+                        {seatNo}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
             </View>
           )}
         </View>
@@ -417,8 +493,13 @@ const RouteDetail = () => {
       </ScrollView>
 
       {/* Bottom action */}
-      <View className="absolute bottom-0 left-0 right-0 px-4 pb-4">
-        {/* Selected seats summary */}
+      <View
+        onLayout={(e) => {
+          setBottomPanelHeight(e.nativeEvent.layout.height);
+        }}
+        className="absolute bottom-0 left-0 right-0 px-4 pb-4 pt-2"
+        style={{ backgroundColor: "rgba(245,247,250,0.96)" }}
+      >
         <View className="bg-white border border-gray-200 rounded-2xl px-4 py-3 mb-3 shadow-sm">
           <View className="flex-row justify-between items-start">
             <View className="flex-1 pr-4">
@@ -437,31 +518,20 @@ const RouteDetail = () => {
           </View>
         </View>
 
-        {/* Continue button */}
         <Pressable
-          onPress={() => {
-            if (selectedSeats.length === 0) {
-              Alert.alert("Error", "Please select at least one seat");
-              return;
-            }
-
-            Alert.alert(
-              "Continue",
-              `Selected seats: ${selectedSeats.join(", ")}`,
-            );
-
-            // TODO:
-            // router.push({
-            //   pathname: "/booking",
-            //   params: {
-            //     routeId: routeData.id,
-            //     seats: JSON.stringify(selectedSeats),
-            //   },
-            // });
-          }}
-          className="bg-[#12B3A8] rounded-2xl py-4 items-center justify-center shadow-sm"
+          disabled={!canContinue}
+          onPress={handleContinue}
+          className={`rounded-2xl py-4 mb-4 items-center justify-center shadow-sm ${
+            canContinue ? "bg-[#12B3A8]" : "bg-gray-300"
+          }`}
         >
-          <Text className="text-white font-extrabold text-base">Continue</Text>
+          <Text
+            className={`font-extrabold text-base ${
+              canContinue ? "text-white" : "text-gray-500"
+            }`}
+          >
+            {holdingSeat ? "Processing..." : "Continue"}
+          </Text>
         </Pressable>
       </View>
     </View>

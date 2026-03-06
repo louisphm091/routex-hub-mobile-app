@@ -1,14 +1,18 @@
 import Header from "@/components/Header";
-import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  FontAwesome5,
+  MaterialCommunityIcons,
+  MaterialIcons,
+} from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import axios from "axios";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -17,7 +21,7 @@ import {
   ArrowPathRoundedSquareIcon,
   ChevronDoubleRightIcon,
 } from "react-native-heroicons/outline";
-import { api, API_BASE_URL, SEARCH_ROUTE_PATH } from "@/utils/env";
+import { api, SEARCH_ROUTE_PATH } from "@/utils/env";
 import { genUUID, nowOffsetDateTime } from "@/utils/request";
 
 interface RouteOfferData {
@@ -202,6 +206,24 @@ const DepartureDate: React.FC<DepartureDateProps> = ({
   </Pressable>
 );
 
+interface QuickInfoCardProps {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}
+
+const QuickInfoCard: React.FC<QuickInfoCardProps> = ({
+  icon,
+  title,
+  subtitle,
+}) => (
+  <View className="bg-white rounded-2xl p-4 border border-gray-100 flex-1">
+    <View className="mb-3">{icon}</View>
+    <Text className="text-gray-900 font-extrabold text-base">{title}</Text>
+    <Text className="text-gray-500 text-sm mt-1">{subtitle}</Text>
+  </View>
+);
+
 export default function HomeScreen() {
   const [isPending, setIsPending] = useState(false);
   const [pageNavigation, setPageNavigation] = useState("one-way");
@@ -235,15 +257,25 @@ export default function HomeScreen() {
             originCode,
             destinationName,
             destinationCode,
+            loginFlag,
+            storedUserName,
+            storedRoutePoint,
           ] = await Promise.all([
             AsyncStorage.getItem("departureDate"),
             AsyncStorage.getItem("originCity"),
             AsyncStorage.getItem("originCode"),
             AsyncStorage.getItem("destinationCity"),
             AsyncStorage.getItem("destinationCode"),
+            AsyncStorage.getItem("isLoggedIn"),
+            AsyncStorage.getItem("userName"),
+            AsyncStorage.getItem("routePoint"),
           ]);
 
           if (!mounted) return;
+
+          setIsLoggedIn(loginFlag === "true");
+          setUserName(storedUserName || "Customer");
+          setRoutePoint(storedRoutePoint);
 
           if (depDate) {
             setSelectedDate(depDate);
@@ -355,12 +387,17 @@ export default function HomeScreen() {
     }
   };
 
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState("Customer");
+  const [routePoint, setRoutePoint] = useState<string | null>(null);
+
   return (
-    <View className="flex-1 items-center bg-[#F5F7FA] relative">
+    <View className="flex-1 bg-[#F5F7FA] relative">
       <StatusBar style="light" />
+
       {isPending && (
         <View className="absolute z-50 w-full h-full justify-center items-center">
-          <View className="bg-[#000000] bg-opacity-50 h-full w-full justfiy-center items-center opacity-[0.45]"></View>
+          <View className="bg-[#000000] bg-opacity-50 h-full w-full justfiy-center items-center opacity-[0.45]" />
           <View className="absolute">
             <ActivityIndicator
               size="large"
@@ -373,110 +410,293 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {/* Header */}
-      <View
-        className="h-64 mb-4 justify-start border-orange-600 w-full bg-[#192031] relative pt-16"
-        style={{
-          borderBottomLeftRadius: 30,
-          borderBottomRightRadius: 30,
-        }}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={false}
       >
-        <Header />
-      </View>
-
-      {/* Form Area */}
-      <View className="w-full px-4 -mt-32 mx-4">
-        <View className="bg-white rounded-3xl pt-2 pb-4 shadow-md shadow-slate-300">
-          <View className="flex-row justify-between w-full px-4 py-2">
-            <TripOption
-              pageNavigation={pageNavigation}
-              handleNavigationChange={handleNavigationChange}
-            />
-          </View>
-          {/* Departure City */}
-          <LocationInput
-            placeholder={
-              searchRouteData.originCity
-                ? searchRouteData.originCity
-                : "Departure City"
-            }
-            icon={<FontAwesome5 size={20} color="gray" name="bus" />}
-            value={searchRouteData.originCity}
-            onPress={() =>
-              router.push({
-                pathname: "/departure",
-                params: { type: "origin" },
-              })
-            }
+        {/* Header */}
+        <View
+          className="h-64 mb-4 justify-start w-full bg-[#192031] relative pt-16"
+          style={{
+            borderBottomLeftRadius: 30,
+            borderBottomRightRadius: 30,
+          }}
+        >
+          <Header
+            isLoggedIn={isLoggedIn}
+            userName={userName}
+            routePoint={routePoint}
           />
+        </View>
 
-          {/* Destination City  */}
-          <LocationInput
-            placeholder={
-              searchRouteData.destinationCity
-                ? searchRouteData.destinationCity
-                : "Destination City"
-            }
-            icon={<FontAwesome5 size={20} color="gray" name="map-marker-alt" />}
-            value={searchRouteData.destinationCity}
-            onPress={() =>
-              router.push({
-                pathname: "/selectLocation",
-                params: { type: "destination" },
-              })
-            }
-          />
-
-          {/* Departure Date */}
-          <DepartureDate
-            placeholder="Departure Date"
-            icon={<FontAwesome5 size={20} color="gray" name="calendar-alt" />}
-            value={selectedDate || searchRouteData.departureDate}
-            onPress={() => router.push("/departureDate")}
-          />
-
-          {/* Seat  */}
-          <View className="border-2 border-gray-300  border-r-2 mx-4 rounded-2xl py-3 justify-center items-center flex-row pl-4">
-            <View>
-              <MaterialCommunityIcons
-                size={20}
-                color="gray"
-                name="seat-passenger"
+        {/* Form Area */}
+        <View className="w-full px-4 -mt-28">
+          <View className="bg-white rounded-3xl pt-2 pb-4 shadow-md shadow-slate-300">
+            <View className="flex-row justify-between w-full px-4 py-2">
+              <TripOption
+                pageNavigation={pageNavigation}
+                handleNavigationChange={handleNavigationChange}
               />
             </View>
 
-            <TextInput
-              className="w-[85%] text-base px-4 font-semibold"
-              placeholder="Seat"
-              keyboardType="numeric"
-              value={String(searchRouteData.seat)}
-              onChangeText={(text) => {
-                const seatValue = parseInt(text, 10);
-                const validSeatValue = isNaN(seatValue) ? 0 : seatValue;
-                setSearchRouteData((prev) => ({
-                  ...prev,
-                  seat: validSeatValue,
-                }));
-
-                setRouteOfferData((prev) => ({
-                  ...prev,
-                  adults: validSeatValue,
-                }));
-              }}
+            {/* Departure City */}
+            <LocationInput
+              placeholder={
+                searchRouteData.originCity
+                  ? searchRouteData.originCity
+                  : "Departure City"
+              }
+              icon={<FontAwesome5 size={20} color="gray" name="bus" />}
+              value={searchRouteData.originCity}
+              onPress={() =>
+                router.push({
+                  pathname: "/departure",
+                  params: { type: "origin" },
+                })
+              }
             />
-          </View>
 
-          {/* Search Button */}
-          <View className="w-full justify-start pt-2 px-4 mt-2">
-            <Pressable
-              className="bg-[#12B3A8] rounded-lg justify-center items-center py-4"
-              onPress={handleParentSearch}
-            >
-              <Text className="text-white font-bold text-lg">Search</Text>
-            </Pressable>
+            {/* Destination City */}
+            <LocationInput
+              placeholder={
+                searchRouteData.destinationCity
+                  ? searchRouteData.destinationCity
+                  : "Destination City"
+              }
+              icon={
+                <FontAwesome5 size={20} color="gray" name="map-marker-alt" />
+              }
+              value={searchRouteData.destinationCity}
+              onPress={() =>
+                router.push({
+                  pathname: "/selectLocation",
+                  params: { type: "destination" },
+                })
+              }
+            />
+
+            {/* Departure Date */}
+            <DepartureDate
+              placeholder="Departure Date"
+              icon={<FontAwesome5 size={20} color="gray" name="calendar-alt" />}
+              value={selectedDate || searchRouteData.departureDate}
+              onPress={() => router.push("/departureDate")}
+            />
+
+            {/* Seat */}
+            <View className="border-2 border-gray-300 mx-4 rounded-2xl py-3 justify-center items-center flex-row pl-4">
+              <View>
+                <MaterialCommunityIcons
+                  size={20}
+                  color="gray"
+                  name="seat-passenger"
+                />
+              </View>
+
+              <TextInput
+                className="w-[85%] text-base px-4 font-semibold"
+                placeholder="Seat"
+                keyboardType="numeric"
+                value={String(searchRouteData.seat)}
+                onChangeText={(text) => {
+                  const seatValue = parseInt(text, 10);
+                  const validSeatValue = isNaN(seatValue) ? 0 : seatValue;
+                  setSearchRouteData((prev) => ({
+                    ...prev,
+                    seat: validSeatValue,
+                  }));
+
+                  setRouteOfferData((prev) => ({
+                    ...prev,
+                    adults: validSeatValue,
+                  }));
+                }}
+              />
+            </View>
+
+            {/* Search Button */}
+            <View className="w-full justify-start pt-2 px-4 mt-2">
+              <Pressable
+                className="bg-[#12B3A8] rounded-lg justify-center items-center py-4"
+                onPress={handleParentSearch}
+              >
+                <Text className="text-white font-bold text-lg">Search</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-      </View>
+
+        {/* Quick Summary */}
+        <View className="px-4 mt-6">
+          <Text className="text-lg font-extrabold text-gray-900 mb-3">
+            Why choose our route service?
+          </Text>
+
+          <View className="flex-row gap-3">
+            <QuickInfoCard
+              icon={
+                <MaterialCommunityIcons
+                  name="clock-check-outline"
+                  size={24}
+                  color="#12B3A8"
+                />
+              }
+              title="On-time departures"
+              subtitle="Manage and operate trips with accurate departure planning."
+            />
+
+            <QuickInfoCard
+              icon={
+                <MaterialCommunityIcons
+                  name="seat-recline-normal"
+                  size={24}
+                  color="#12B3A8"
+                />
+              }
+              title="Seat availability"
+              subtitle="Track available, held, sold and blocked seats in real time."
+            />
+          </View>
+        </View>
+
+        {/* Stats / Business Features */}
+        <View className="px-4 mt-6">
+          <View className="bg-[#192031] rounded-3xl p-5">
+            <Text className="text-white text-lg font-extrabold">
+              Go Routex Transport Platform
+            </Text>
+            <Text className="text-gray-300 mt-2 leading-5">
+              Manage routes, vehicles, seat inventory and booking flow in one
+              unified mobile experience.
+            </Text>
+
+            <View className="flex-row justify-between mt-5">
+              <View className="items-center flex-1">
+                <Text className="text-[#12B3A8] text-2xl font-extrabold">
+                  24/7
+                </Text>
+                <Text className="text-gray-300 text-xs mt-1">Monitoring</Text>
+              </View>
+
+              <View className="items-center flex-1">
+                <Text className="text-[#12B3A8] text-2xl font-extrabold">
+                  100%
+                </Text>
+                <Text className="text-gray-300 text-xs mt-1">Seat Control</Text>
+              </View>
+
+              <View className="items-center flex-1">
+                <Text className="text-[#12B3A8] text-2xl font-extrabold">
+                  Real-time
+                </Text>
+                <Text className="text-gray-300 text-xs mt-1">Booking</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Popular routes */}
+        <View className="px-4 mt-6">
+          <Text className="text-lg font-extrabold text-gray-900 mb-3">
+            Popular routes
+          </Text>
+
+          <View className="bg-white rounded-2xl border border-gray-100 p-4">
+            <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+              <View>
+                <Text className="font-bold text-gray-900">
+                  Hà Nội → Hải Phòng
+                </Text>
+                <Text className="text-sm text-gray-500 mt-1">
+                  Limousine • Frequent departures
+                </Text>
+              </View>
+              <MaterialIcons
+                name="keyboard-arrow-right"
+                size={24}
+                color="gray"
+              />
+            </View>
+
+            <View className="flex-row justify-between items-center py-2 border-b border-gray-100">
+              <View>
+                <Text className="font-bold text-gray-900">
+                  Sài Gòn → Nha Trang
+                </Text>
+                <Text className="text-sm text-gray-500 mt-1">
+                  Sleeper bus • Night route
+                </Text>
+              </View>
+              <MaterialIcons
+                name="keyboard-arrow-right"
+                size={24}
+                color="gray"
+              />
+            </View>
+
+            <View className="flex-row justify-between items-center py-2">
+              <View>
+                <Text className="font-bold text-gray-900">
+                  Đà Lạt → Sài Gòn
+                </Text>
+                <Text className="text-sm text-gray-500 mt-1">
+                  Premium coach • Daily schedule
+                </Text>
+              </View>
+              <MaterialIcons
+                name="keyboard-arrow-right"
+                size={24}
+                color="gray"
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Notes / booking policy */}
+        <View className="px-4 mt-6">
+          <Text className="text-lg font-extrabold text-gray-900 mb-3">
+            Booking notes
+          </Text>
+
+          <View className="bg-white rounded-2xl border border-gray-100 p-4">
+            <View className="flex-row items-start mb-3">
+              <MaterialCommunityIcons
+                name="check-circle-outline"
+                size={20}
+                color="#12B3A8"
+              />
+              <Text className="text-gray-700 ml-3 flex-1">
+                Selected seats are held temporarily before payment confirmation.
+              </Text>
+            </View>
+
+            <View className="flex-row items-start mb-3">
+              <MaterialCommunityIcons
+                name="check-circle-outline"
+                size={20}
+                color="#12B3A8"
+              />
+              <Text className="text-gray-700 ml-3 flex-1">
+                Seat availability is synchronized with route inventory in real
+                time.
+              </Text>
+            </View>
+
+            <View className="flex-row items-start">
+              <MaterialCommunityIcons
+                name="check-circle-outline"
+                size={20}
+                color="#12B3A8"
+              />
+              <Text className="text-gray-700 ml-3 flex-1">
+                Vehicle assignment and seat generation are managed automatically
+                per trip.
+              </Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }
